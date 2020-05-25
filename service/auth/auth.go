@@ -18,10 +18,10 @@ import (
 	cliutil "github.com/micro/micro/v2/client/cli/util"
 	"github.com/micro/micro/v2/internal/client"
 	"github.com/micro/micro/v2/internal/config"
-	"github.com/micro/micro/v2/service/auth/api"
 	accountsHandler "github.com/micro/micro/v2/service/auth/handler/accounts"
 	authHandler "github.com/micro/micro/v2/service/auth/handler/auth"
 	rulesHandler "github.com/micro/micro/v2/service/auth/handler/rules"
+	"github.com/micro/micro/v2/service/auth/web"
 )
 
 var (
@@ -90,6 +90,21 @@ var (
 		&cli.StringSliceFlag{
 			Name:  "roles",
 			Usage: "Comma seperated list of roles to give the account",
+		},
+	}
+	// ProviderFlags are provided to the create provider command
+	ProviderFlags = []cli.Flag{
+		&cli.StringFlag{
+			Name:  "client_id",
+			Usage: "The client id required to verify with the provider",
+		},
+		&cli.StringFlag{
+			Name:  "client_secret",
+			Usage: "The client secret required to verify with the provider",
+		},
+		&cli.StringFlag{
+			Name:  "scope",
+			Usage: "The scope to request from the provider",
 		},
 	}
 )
@@ -246,12 +261,12 @@ func Commands(srvOpts ...micro.Option) []*cli.Command {
 			},
 			Subcommands: append([]*cli.Command{
 				{
-					Name:        "api",
-					Usage:       "Run the auth api",
-					Description: "Run the auth api",
+					Name:        "web",
+					Usage:       "Run auth web",
+					Description: "Run auth web",
 					Flags:       ServiceFlags,
 					Action: func(ctx *cli.Context) error {
-						api.Run(ctx, srvOpts...)
+						web.Run(ctx, srvOpts...)
 						return nil
 					},
 				},
@@ -273,6 +288,21 @@ func Commands(srvOpts ...micro.Option) []*cli.Command {
 							Action: func(ctx *cli.Context) error {
 								listAccounts(ctx)
 								return nil
+							},
+						},
+						{
+							Name:  "providers",
+							Usage: "List auth providers",
+							Action: func(ctx *cli.Context) error {
+								listProviders(ctx)
+								return nil
+							},
+							Flags: []cli.Flag{
+								&cli.BoolFlag{
+									Name:  "secrets",
+									Usage: "Display client_id and client_secret",
+									Value: false,
+								},
 							},
 						},
 					}),
@@ -299,6 +329,15 @@ func Commands(srvOpts ...micro.Option) []*cli.Command {
 								return nil
 							},
 						},
+						{
+							Name:  "provider",
+							Usage: "Create an auth provider",
+							Flags: append(ProviderFlags),
+							Action: func(ctx *cli.Context) error {
+								createProvider(ctx)
+								return nil
+							},
+						},
 					}),
 				},
 				{
@@ -311,6 +350,14 @@ func Commands(srvOpts ...micro.Option) []*cli.Command {
 							Flags: RuleFlags,
 							Action: func(ctx *cli.Context) error {
 								deleteRule(ctx)
+								return nil
+							},
+						},
+						{
+							Name:  "provider",
+							Usage: "Delete an auth provider",
+							Action: func(ctx *cli.Context) error {
+								deleteProvider(ctx)
 								return nil
 							},
 						},
