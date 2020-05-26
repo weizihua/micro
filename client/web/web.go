@@ -59,6 +59,7 @@ var (
 	// This is stripped from the request path
 	// Allows the web service to define absolute paths
 	BasePathHeader        = "X-Micro-Web-Base-Path"
+	HostHeader            = "X-Micro-Web-Host-Name"
 	statsURL              string
 	loginURL              string
 	ACMEProvider          = "autocert"
@@ -192,6 +193,7 @@ func (s *srv) proxy() *proxy {
 			}
 		}
 
+		r.Header.Set(HostHeader, r.URL.Host)
 		r.Header.Set(BasePathHeader, "/"+endpoint.Name)
 		r.URL.Host = endpoint.Host
 		r.URL.Path = endpoint.Path

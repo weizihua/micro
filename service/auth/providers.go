@@ -11,10 +11,9 @@ import (
 
 	"github.com/micro/cli/v2"
 	"github.com/micro/go-micro/v2/auth/provider"
-	"github.com/micro/go-micro/v2/auth/provider/oauth"
 	configPb "github.com/micro/go-micro/v2/config/source/service/proto"
+	"github.com/micro/micro/v2/internal/auth"
 	"github.com/micro/micro/v2/internal/client"
-	"github.com/micro/micro/v2/internal/namespace"
 )
 
 func listProviders(ctx *cli.Context) {
@@ -22,7 +21,7 @@ func listProviders(ctx *cli.Context) {
 	config := configPb.NewConfigService("go.micro.config", client.New(ctx))
 
 	// todo: find a better way of accessing the config service
-	req := &configPb.ReadRequest{Namespace: namespace.DefaultNamespace, Path: "micro.auth.providers"}
+	req := &configPb.ReadRequest{Namespace: "global", Path: "micro.auth.providers"}
 	if rsp, err := config.Read(context.TODO(), req); err == nil {
 		var data map[string]string
 		json.Unmarshal([]byte(rsp.Change.ChangeSet.Data), &data)
@@ -45,8 +44,8 @@ func listProviders(ctx *cli.Context) {
 		}
 
 		if opts.Type == "oauth" {
-			opts.Redirect = "/auth/" + name + "/login"
-			opts.Endpoint = oauth.Endpoints[name].AuthURL
+			opts.Redirect = "/auth/" + name + "/verify"
+			opts.AuthURL = auth.OauthProviders[name].AuthURL
 			name = opts.Type + "/" + name
 
 			if len(opts.Scope) == 0 {
@@ -58,12 +57,12 @@ func listProviders(ctx *cli.Context) {
 			name = "basic"
 			opts.ClientID = "n/a"
 			opts.ClientSecret = "n/a"
-			opts.Endpoint = "n/a"
+			opts.AuthURL = "n/a"
 			opts.Redirect = "n/a"
 			opts.Scope = "n/a"
 		}
 
-		fmt.Fprintln(w, strings.Join([]string{name, opts.ClientID, opts.ClientSecret, opts.Endpoint, opts.Redirect, opts.Scope}, "\t"))
+		fmt.Fprintln(w, strings.Join([]string{name, opts.ClientID, opts.ClientSecret, opts.AuthURL, opts.Redirect, opts.Scope}, "\t"))
 	}
 }
 
@@ -80,7 +79,7 @@ func createProvider(ctx *cli.Context) {
 
 		_, err := config.Update(context.TODO(), &configPb.UpdateRequest{
 			Change: &configPb.Change{
-				Namespace: namespace.DefaultNamespace,
+				Namespace: "global",
 				Path:      "micro.auth.providers.basic",
 				ChangeSet: &configPb.ChangeSet{
 					Data:      string(bytes),
@@ -107,7 +106,7 @@ func createProvider(ctx *cli.Context) {
 	}
 
 	// check to see if it's a supported oauth provider, e.g. google
-	if _, ok := oauth.Endpoints[name]; !ok {
+	if _, ok := auth.OauthProviders[name]; !ok {
 		fmt.Println("Unsupported oauth provider")
 		return
 	}
@@ -130,7 +129,7 @@ func createProvider(ctx *cli.Context) {
 
 	_, err := config.Update(context.TODO(), &configPb.UpdateRequest{
 		Change: &configPb.Change{
-			Namespace: namespace.DefaultNamespace,
+			Namespace: "global",
 			Path:      "micro.auth.providers." + name,
 			ChangeSet: &configPb.ChangeSet{
 				Data:      string(bytes),
@@ -160,7 +159,7 @@ func deleteProvider(ctx *cli.Context) {
 	config := configPb.NewConfigService("go.micro.config", client.New(ctx))
 	_, err := config.Delete(context.TODO(), &configPb.DeleteRequest{
 		Change: &configPb.Change{
-			Namespace: namespace.DefaultNamespace,
+			Namespace: "global",
 			Path:      "micro.auth.providers." + name,
 		},
 	})
