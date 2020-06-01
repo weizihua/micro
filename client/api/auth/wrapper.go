@@ -11,6 +11,7 @@ import (
 	"github.com/micro/go-micro/v2/api/server"
 	"github.com/micro/go-micro/v2/auth"
 	"github.com/micro/go-micro/v2/logger"
+	"github.com/micro/go-micro/v2/router"
 	"github.com/micro/go-micro/v2/util/ctx"
 	inauth "github.com/micro/micro/v2/internal/auth"
 	"github.com/micro/micro/v2/internal/namespace"
@@ -36,6 +37,7 @@ type authWrapper struct {
 }
 
 func (a authWrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+
 	// Determine the namespace and set it in the header
 	ns := req.Header.Get(namespace.NamespaceKey)
 	if len(ns) == 0 {
@@ -65,15 +67,16 @@ func (a authWrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// account doesn't necesserially mean a forbidden request
 	acc, _ := a.auth.Inspect(token)
 
-	// Ensure the accounts issuer matches the namespace being requested
+	// Ensure the accounts issuer matches the namespace being requested. If it doesn't match, unset
+	// the authorizaton header
 	if acc != nil && acc.Issuer != ns {
-		http.Error(w, "Account not issued by "+ns, 403)
-		return
+		req.Header.Del("Authorization")
+		acc = nil
 	}
 
 	// Determine the name of the service being requested
 	endpoint, err := a.resolver.Resolve(req)
-	if err == resolver.ErrInvalidPath || err == resolver.ErrNotFound {
+	if err == resolver.ErrInvalidPath || err == router.ErrRouteNotFound {
 		// a file not served by the resolver has been requested (e.g. favicon.ico)
 		endpoint = &resolver.Endpoint{Path: req.URL.Path}
 	} else if err != nil {

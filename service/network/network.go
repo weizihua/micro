@@ -35,7 +35,7 @@ var (
 	// Name of the network service
 	Name = "go.micro.network"
 	// Name of the micro network
-	Network = "go.micro"
+	Network = "micro"
 	// Address is the network address
 	Address = ":8085"
 	// Set the advertise address

@@ -171,10 +171,7 @@ func (r *Resolver) resolveWithPath(req *http.Request) (*res.Endpoint, error) {
 
 	// lookup the routes for the service
 	routes, err := r.Router.Lookup(router.QueryService(namespace + "." + parts[1]))
-	if err == router.ErrRouteNotFound {
-		// fallback to path based
-		return r.resolveWithPath(req)
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 
