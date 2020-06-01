@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	res "github.com/micro/go-micro/v2/api/resolver"
-	"github.com/micro/go-micro/v2/client/selector"
+	"github.com/micro/go-micro/v2/router"
+	"github.com/micro/go-micro/v2/selector"
 	"github.com/micro/micro/v2/internal/namespace"
 	"golang.org/x/net/publicsuffix"
 )
@@ -23,8 +24,10 @@ type Resolver struct {
 	Type string
 	// a function which returns the namespace of the request
 	Namespace func(*http.Request) string
-	// selector to find services
+	// selector to choose from a pool of nodes
 	Selector selector.Selector
+	// router to lookup routes
+	Router router.Router
 }
 
 func reverse(s []string) {
@@ -130,17 +133,17 @@ func (r *Resolver) Resolve(req *http.Request) (*res.Endpoint, error) {
 		name = alias + ".web." + comps[1]
 	}
 
-	// find the service using the selector
-	next, err := r.Selector.Select(name)
-	if err == selector.ErrNotFound {
+	// lookup the routes for the service
+	routes, err := r.Router.Lookup(router.QueryService(name))
+	if err == router.ErrRouteNotFound {
 		// fallback to path based
 		return r.resolveWithPath(req)
 	} else if err != nil {
 		return nil, err
 	}
 
-	// TODO: better retry strategy
-	s, err := next()
+	// select the route to use
+	route, err := r.Selector.Select(routes...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +152,7 @@ func (r *Resolver) Resolve(req *http.Request) (*res.Endpoint, error) {
 	return &res.Endpoint{
 		Name:   alias,
 		Method: req.Method,
-		Host:   s.Address,
+		Host:   route.Address,
 		Path:   req.URL.Path,
 	}, nil
 }
@@ -165,15 +168,18 @@ func (r *Resolver) resolveWithPath(req *http.Request) (*res.Endpoint, error) {
 	}
 
 	_, namespace, _ := r.Info(req)
-	next, err := r.Selector.Select(namespace + "." + parts[1])
-	if err == selector.ErrNotFound {
-		return nil, res.ErrNotFound
+
+	// lookup the routes for the service
+	routes, err := r.Router.Lookup(router.QueryService(namespace + "." + parts[1]))
+	if err == router.ErrRouteNotFound {
+		// fallback to path based
+		return r.resolveWithPath(req)
 	} else if err != nil {
 		return nil, err
 	}
 
-	// TODO: better retry strategy
-	s, err := next()
+	// select the route to use
+	route, err := r.Selector.Select(routes...)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +188,7 @@ func (r *Resolver) resolveWithPath(req *http.Request) (*res.Endpoint, error) {
 	return &res.Endpoint{
 		Name:   parts[1],
 		Method: req.Method,
-		Host:   s.Address,
+		Host:   route.Address,
 		Path:   "/" + strings.Join(parts[2:], "/"),
 	}, nil
 }

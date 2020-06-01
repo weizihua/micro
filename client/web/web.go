@@ -26,10 +26,11 @@ import (
 	"github.com/micro/go-micro/v2/api/server/cors"
 	httpapi "github.com/micro/go-micro/v2/api/server/http"
 	"github.com/micro/go-micro/v2/auth"
-	"github.com/micro/go-micro/v2/client/selector"
 	"github.com/micro/go-micro/v2/config/cmd"
 	log "github.com/micro/go-micro/v2/logger"
 	"github.com/micro/go-micro/v2/registry"
+	"github.com/micro/go-micro/v2/router"
+	"github.com/micro/go-micro/v2/selector"
 	"github.com/micro/go-micro/v2/sync/memory"
 	apiAuth "github.com/micro/micro/v2/client/api/auth"
 	inauth "github.com/micro/micro/v2/internal/auth"
@@ -489,8 +490,9 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 			// Default to type path
 			Type:      Resolver,
 			Namespace: namespace.NewResolver(Type, Namespace).ResolveWithType,
-			Selector: selector.NewSelector(
-				selector.Registry(reg),
+			Selector:  selector.NewSelector(),
+			Router: router.NewRouter(
+				router.Registry(reg),
 			),
 		},
 		auth: *cmd.DefaultOptions().Auth,

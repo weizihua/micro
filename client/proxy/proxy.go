@@ -94,9 +94,9 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 
 	ropts := []router.Option{
 		router.Id(server.DefaultId),
-		router.Client(client.DefaultClient),
 		router.Address(routerAddr),
 		router.Registry(registry.DefaultRegistry),
+		rs.Client(client.DefaultClient),
 	}
 
 	// check if we need to use the router service
