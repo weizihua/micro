@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/micro/go-micro/v2"
@@ -57,8 +56,8 @@ func (r *Registry) publishEvent(action string, service *pb.Service) error {
 
 // GetService from the registry with the name requested
 func (r *Registry) GetService(ctx context.Context, req *pb.GetRequest, rsp *pb.GetResponse) error {
-	// get the services in the default namespace
-	services, err := r.Registry.GetService(req.Service)
+	// get the services in the default (shared) namespace
+	services, err := r.Registry.GetService(req.Service, registry.GetDomain(namespace.DefaultNamespace))
 	if err == registry.ErrNotFound {
 		return errors.NotFound("go.micro.registry", err.Error())
 	} else if err != nil {
@@ -67,31 +66,34 @@ func (r *Registry) GetService(ctx context.Context, req *pb.GetRequest, rsp *pb.G
 
 	// get the services in the requested namespace, e.g. the "foo" namespace. name
 	// includes the namespace as the prefix, e.g. 'foo/go.micro.service.bar'
-	if namespace.FromContext(ctx) != namespace.DefaultNamespace {
-		name := namespace.FromContext(ctx) + nameSeperator + req.Service
-		srvs, err := r.Registry.GetService(name)
+	if ns := namespace.FromContext(ctx); ns != namespace.DefaultNamespace {
+		srvs, err := r.Registry.GetService(req.Service, registry.GetDomain(ns))
 		if err != nil {
 			return errors.InternalServerError("go.micro.registry", err.Error())
 		}
 		services = append(services, srvs...)
 	}
 
+	// serialize the services
 	for _, srv := range services {
-		rsp.Services = append(rsp.Services, service.ToProto(withoutNamespace(*srv)))
+		rsp.Services = append(rsp.Services, service.ToProto(srv))
 	}
 	return nil
 }
 
 // Register a service
 func (r *Registry) Register(ctx context.Context, req *pb.Service, rsp *pb.EmptyResponse) error {
-	var regOpts []registry.RegisterOption
-	if req.Options != nil {
-		ttl := time.Duration(req.Options.Ttl) * time.Second
-		regOpts = append(regOpts, registry.RegisterTTL(ttl))
+	opts := []registry.RegisterOption{
+		registry.RegisterDomain(namespace.FromContext(ctx)),
 	}
 
-	service := service.ToService(withNamespace(*req, namespace.FromContext(ctx)))
-	if err := r.Registry.Register(service, regOpts...); err != nil {
+	if req.Options != nil {
+		ttl := time.Duration(req.Options.Ttl) * time.Second
+		opts = append(opts, registry.RegisterTTL(ttl))
+	}
+
+	service := service.ToService(req)
+	if err := r.Registry.Register(service, opts...); err != nil {
 		return errors.InternalServerError("go.micro.registry", err.Error())
 	}
 
@@ -103,8 +105,12 @@ func (r *Registry) Register(ctx context.Context, req *pb.Service, rsp *pb.EmptyR
 
 // Deregister a service
 func (r *Registry) Deregister(ctx context.Context, req *pb.Service, rsp *pb.EmptyResponse) error {
-	service := service.ToService(withNamespace(*req, namespace.FromContext(ctx)))
-	if err := r.Registry.Deregister(service); err != nil {
+	opts := []registry.DeregisterOption{
+		registry.DeregisterDomain(namespace.FromContext(ctx)),
+	}
+
+	service := service.ToService(req)
+	if err := r.Registry.Deregister(service, opts...); err != nil {
 		return errors.InternalServerError("go.micro.registry", err.Error())
 	}
 
@@ -116,20 +122,24 @@ func (r *Registry) Deregister(ctx context.Context, req *pb.Service, rsp *pb.Empt
 
 // ListServices returns all the services
 func (r *Registry) ListServices(ctx context.Context, req *pb.ListRequest, rsp *pb.ListResponse) error {
-	services, err := r.Registry.ListServices()
+	// get the services in the default domain
+	services, err := r.Registry.ListServices(registry.ListDomain(namespace.DefaultNamespace))
 	if err != nil {
 		return errors.InternalServerError("go.micro.registry", err.Error())
 	}
 
-	for _, srv := range services {
-		// check to see if the service belongs to the defaut namespace
-		// or the contexts namespace. TODO: think about adding a prefix
-		//argument to ListServices
-		if !canReadService(ctx, srv) {
-			continue
+	// get the services in the requested domain if it isn't the default
+	if ns := namespace.FromContext(ctx); ns != namespace.DefaultNamespace {
+		srvs, err := r.Registry.ListServices(registry.ListDomain(ns))
+		if err != nil {
+			return errors.InternalServerError("go.micro.registry", err.Error())
 		}
+		services = append(services, srvs...)
+	}
 
-		rsp.Services = append(rsp.Services, service.ToProto(withoutNamespace(*srv)))
+	// serialize the services
+	for _, srv := range services {
+		rsp.Services = append(rsp.Services, service.ToProto(srv))
 	}
 
 	return nil
@@ -137,69 +147,81 @@ func (r *Registry) ListServices(ctx context.Context, req *pb.ListRequest, rsp *p
 
 // Watch a service for changes
 func (r *Registry) Watch(ctx context.Context, req *pb.WatchRequest, rsp pb.Registry_WatchStream) error {
-	watcher, err := r.Registry.Watch(registry.WatchService(req.Service))
+	// exit is closed when
+	exit := make(chan bool)
+
+	// master channel all events will flow through. since we could be combinining two channels below
+	// this simplifies things.
+	results := make(chan *registry.Result)
+
+	// watch the default (shared) namespace
+	opts := []registry.WatchOption{
+		registry.WatchService(req.Service),
+		registry.WatchDomain(namespace.DefaultNamespace),
+	}
+
+	watcher, err := r.Registry.Watch(opts...)
 	if err != nil {
 		return errors.InternalServerError("go.micro.registry", err.Error())
 	}
+	defer watcher.Stop()
+	go func() {
+		c := watcher.Chan()
+
+		for {
+			select {
+			case <-exit:
+				return
+			case ev := <-c:
+				results <- ev
+			}
+		}
+	}()
+
+	// watch the custom namespace if specified
+	if ns := namespace.FromContext(ctx); ns != namespace.DefaultNamespace {
+		opts = []registry.WatchOption{
+			registry.WatchService(req.Service),
+			registry.WatchDomain(ns),
+		}
+		watcher2, err := r.Registry.Watch(opts...)
+		if err != nil {
+			return errors.InternalServerError("go.micro.registry", err.Error())
+		}
+		defer watcher2.Stop()
+		go func() {
+			c := watcher2.Chan()
+
+			for {
+				select {
+				case <-exit:
+					return
+				case ev := <-c:
+					results <- ev
+				}
+			}
+		}()
+	}
 
 	for {
-		next, err := watcher.Next()
-		if err != nil {
-			return errors.InternalServerError("go.micro.registry", err.Error())
+		select {
+		case r, ok := <-results:
+			// the results channel has closed
+			if !ok {
+				close(exit)
+				return nil
+			}
+
+			// send the results from the channel to the stream
+			err := rsp.Send(&pb.Result{Action: r.Action, Service: service.ToProto(r.Service)})
+			if err != nil {
+				close(exit)
+				return errors.InternalServerError("go.micro.registry", err.Error())
+			}
+		case <-ctx.Done():
+			// the context has finished
+			close(exit)
+			return nil
 		}
-		if !canReadService(ctx, next.Service) {
-			continue
-		}
-
-		err = rsp.Send(&pb.Result{
-			Action:  next.Action,
-			Service: service.ToProto(withoutNamespace(*next.Service)),
-		})
-		if err != nil {
-			return errors.InternalServerError("go.micro.registry", err.Error())
-		}
 	}
-}
-
-// canReadService is a helper function which returns a boolean indicating
-// if a context can read a service.
-func canReadService(ctx context.Context, srv *registry.Service) bool {
-	// check if the service has no prefix which means it was written
-	// directly to the store and is therefore assumed to be part of
-	// the default namespace
-	if len(strings.Split(srv.Name, nameSeperator)) == 1 {
-		return true
-	}
-
-	// the service belongs to the contexts namespace
-	if strings.HasPrefix(srv.Name, namespace.FromContext(ctx)+nameSeperator) {
-		return true
-	}
-
-	return false
-}
-
-// nameSeperator is the string which is used as a seperator when joining
-// namespace to the service name
-const nameSeperator = "/"
-
-// withoutNamespace returns the service with the namespace stripped from
-// the name, e.g. 'bar/go.micro.service.foo' => 'go.micro.service.foo'.
-func withoutNamespace(srv registry.Service) *registry.Service {
-	comps := strings.Split(srv.Name, nameSeperator)
-	srv.Name = comps[len(comps)-1]
-	return &srv
-}
-
-// withNamespace returns the service with the namespace prefixed to the
-// name, e.g. 'go.micro.service.foo' => 'bar/go.micro.service.foo'
-func withNamespace(srv pb.Service, ns string) *pb.Service {
-	// if the namespace is the default, don't append anything since this
-	// means users not leveraging multi-tenancy won't experience any changes
-	if ns == namespace.DefaultNamespace {
-		return &srv
-	}
-
-	srv.Name = strings.Join([]string{ns, srv.Name}, nameSeperator)
-	return &srv
 }
