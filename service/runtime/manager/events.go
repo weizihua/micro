@@ -157,7 +157,7 @@ func (m *manager) runtimeEnv(options *runtime.CreateOptions) []string {
 
 	// temp: set the auth namespace. this will be removed once he namespace can be determined from certs.
 	if len(options.Namespace) > 0 {
-		env["MICRO_AUTH_NAMESPACE"] = options.Namespace
+		env["MICRO_NAMESPACE"] = options.Namespace
 	}
 
 	// create a new env
