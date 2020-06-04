@@ -36,7 +36,6 @@ import (
 	inauth "github.com/micro/micro/v2/internal/auth"
 	"github.com/micro/micro/v2/internal/handler"
 	"github.com/micro/micro/v2/internal/helper"
-	"github.com/micro/micro/v2/internal/namespace"
 	"github.com/micro/micro/v2/internal/resolver/web"
 	"github.com/micro/micro/v2/internal/stats"
 	"github.com/micro/micro/v2/plugin"
@@ -77,8 +76,6 @@ type srv struct {
 	registry registry.Registry
 	// the resolver
 	resolver *web.Resolver
-	// the namespace resolver
-	nsResolver *namespace.Resolver
 	// the proxy server
 	prx *proxy
 	// auth service
@@ -489,7 +486,7 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 		resolver: &web.Resolver{
 			// Default to type path
 			Type:      Resolver,
-			Namespace: namespace.NewResolver(Type, Namespace).ResolveWithType,
+			Namespace: Namespace + "." + Type,
 			Selector:  selector.NewSelector(),
 			Router: router.NewRouter(
 				router.Registry(reg),
@@ -595,8 +592,7 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 	}
 
 	// create the namespace resolver and the auth wrapper
-	s.nsResolver = namespace.NewResolver(Type, Namespace)
-	authWrapper := apiAuth.Wrapper(s.resolver, s.nsResolver)
+	authWrapper := apiAuth.Wrapper(s.resolver)
 
 	// create the service and add the auth wrapper
 	srv := httpapi.NewServer(Address, server.WrapHandler(authWrapper))

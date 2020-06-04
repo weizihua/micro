@@ -28,8 +28,9 @@ func (r *Resolver) Resolve(req *http.Request) (*resolver.Endpoint, error) {
 	}
 
 	return &resolver.Endpoint{
-		Name:   r.Options.Namespace + "." + name,
-		Method: method,
+		Name:    r.Options.Namespace + "." + name,
+		Method:  method,
+		Network: "micro",
 	}, nil
 }
 

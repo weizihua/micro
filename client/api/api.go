@@ -21,6 +21,7 @@ import (
 	"github.com/micro/go-micro/v2/api/resolver/grpc"
 	"github.com/micro/go-micro/v2/api/resolver/host"
 	"github.com/micro/go-micro/v2/api/resolver/path"
+	"github.com/micro/go-micro/v2/api/resolver/subdomain"
 	"github.com/micro/go-micro/v2/api/router"
 	regRouter "github.com/micro/go-micro/v2/api/router/registry"
 	"github.com/micro/go-micro/v2/api/server"
@@ -33,7 +34,6 @@ import (
 	"github.com/micro/micro/v2/client/api/auth"
 	"github.com/micro/micro/v2/internal/handler"
 	"github.com/micro/micro/v2/internal/helper"
-	"github.com/micro/micro/v2/internal/namespace"
 	rrmicro "github.com/micro/micro/v2/internal/resolver/api"
 	"github.com/micro/micro/v2/internal/stats"
 	"github.com/micro/micro/v2/plugin"
@@ -194,9 +194,6 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 		r.HandleFunc(RPCPath, handler.RPC)
 	}
 
-	// create the namespace resolver
-	nsResolver := namespace.NewResolver(Type, Namespace)
-
 	// resolver options
 	ropts := []resolver.Option{
 		resolver.WithNamespace(Namespace + "." + Type),
@@ -213,6 +210,8 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 		rr = path.NewResolver(ropts...)
 	case "grpc":
 		rr = grpc.NewResolver(ropts...)
+	case "subdomain":
+		rr = subdomain.NewResolver(rr, ropts...)
 	}
 
 	switch Handler {
@@ -287,7 +286,8 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 			router.WithResolver(rr),
 			router.WithRegistry(service.Options().Registry),
 		)
-		r.PathPrefix(APIPath).Handler(handler.Meta(service, rt, nsResolver.ResolveWithType))
+		ns := Namespace + "." + Type
+		r.PathPrefix(APIPath).Handler(handler.Meta(service, rt, ns))
 	}
 
 	// reverse wrap handler
@@ -297,7 +297,7 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 	}
 
 	// create the auth wrapper and the server
-	authWrapper := auth.Wrapper(rr, nsResolver)
+	authWrapper := auth.Wrapper(rr)
 	api := httpapi.NewServer(Address, server.WrapHandler(authWrapper))
 
 	api.Init(opts...)
@@ -363,6 +363,12 @@ func Commands(options ...micro.Option) []*cli.Command {
 				Usage:   "Enable CORS, allowing the API to be called by frontend applications",
 				EnvVars: []string{"MICRO_API_ENABLE_CORS"},
 				Value:   true,
+			},
+			&cli.StringFlag{
+				Name:    "router_network",
+				Usage:   "Set the network the router will route to. Supported values include subdomain.",
+				EnvVars: []string{"MICRO_API_ROUTER_NETWORK"},
+				Value:   "micro",
 			},
 		},
 	}
