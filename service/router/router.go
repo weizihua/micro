@@ -137,21 +137,10 @@ func (r *rtr) PublishAdverts(ch <-chan *router.Advert) error {
 	return nil
 }
 
-// Start starts the micro router
-func (r *rtr) Start() error {
-	// start the router
-	if err := r.Router.Start(); err != nil {
-		return fmt.Errorf("failed to start router: %v", err)
-	}
-
-	return nil
-}
-
-// Stop stops the micro router
-func (r *rtr) Stop() error {
-	// stop the router
-	if err := r.Router.Stop(); err != nil {
-		return fmt.Errorf("failed to stop router: %v", err)
+// Close closes the micro router
+func (r *rtr) Close() error {
+	if err := r.Router.Close(); err != nil {
+		return fmt.Errorf("failed to close router: %v", err)
 	}
 
 	return nil
@@ -235,19 +224,14 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 
 	log.Info("starting micro router")
 
-	if err := rtr.Start(); err != nil {
-		log.Errorf("failed to start: %s", err)
-		os.Exit(1)
-	}
-
 	log.Info("starting to advertise")
 
 	advertChan, err := rtr.Advertise()
 	if err != nil {
 		log.Errorf("failed to advertise: %s", err)
-		log.Info("attempting to stop the router")
-		if err := rtr.Stop(); err != nil {
-			log.Errorf("failed to stop: %s", err)
+		log.Info("attempting to close the router")
+		if err := rtr.Close(); err != nil {
+			log.Errorf("failed to close: %s", err)
 			os.Exit(1)
 		}
 		os.Exit(1)
@@ -274,17 +258,17 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 		log.Errorf("error running the router: %v", err)
 	}
 
-	log.Info("attempting to stop the router")
+	log.Info("attempting to close the router")
 
-	// stop the router
-	if err := r.Stop(); err != nil {
-		log.Errorf("failed to stop: %s", err)
+	// close the router
+	if err := r.Close(); err != nil {
+		log.Errorf("failed to close: %s", err)
 		os.Exit(1)
 	}
 
 	wg.Wait()
 
-	log.Info("successfully stopped")
+	log.Info("successfully closed")
 }
 
 func Commands(options ...micro.Option) []*cli.Command {
