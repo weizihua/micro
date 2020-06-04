@@ -27,9 +27,8 @@ func (r *Resolver) Resolve(req *http.Request) (*resolver.Endpoint, error) {
 		name = proxyRoute(req.URL.Path)
 	}
 
-	ns := r.Options.Namespace(req)
 	return &resolver.Endpoint{
-		Name:   ns + "." + name,
+		Name:   r.Options.Namespace + "." + name,
 		Method: method,
 	}, nil
 }
