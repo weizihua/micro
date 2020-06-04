@@ -62,10 +62,20 @@ func (r *Registry) GetService(ctx context.Context, req *pb.GetRequest, rsp *pb.G
 		return errors.InternalServerError("go.micro.registry", err.Error())
 	}
 
-	// get the services in the requested namespace, e.g. the "foo" namespace. name
+	// get the services in the current namespace, e.g. the "foo" namespace. name
 	// includes the namespace as the prefix, e.g. 'foo/go.micro.service.bar'
 	if ns := namespace.FromContext(ctx); ns != namespace.DefaultNamespace {
 		srvs, err := r.Registry.GetService(req.Service, registry.GetDomain(ns))
+		if err != nil && err != registry.ErrNotFound {
+			return errors.InternalServerError("go.micro.registry", err.Error())
+		}
+		services = append(services, srvs...)
+	}
+
+	// get the services in the requested domain. TODO: authenticate this so only the server can
+	// request access to any namespace
+	if len(req.Domain) > 0 && req.Domain != namespace.DefaultNamespace {
+		srvs, err := r.Registry.GetService(req.Service, registry.GetDomain(req.Domain))
 		if err != nil && err != registry.ErrNotFound {
 			return errors.InternalServerError("go.micro.registry", err.Error())
 		}
@@ -135,6 +145,16 @@ func (r *Registry) ListServices(ctx context.Context, req *pb.ListRequest, rsp *p
 	if ns := namespace.FromContext(ctx); ns != namespace.DefaultNamespace {
 		srvs, err := r.Registry.ListServices(registry.ListDomain(ns))
 		if err != nil {
+			return errors.InternalServerError("go.micro.registry", err.Error())
+		}
+		services = append(services, srvs...)
+	}
+
+	// list the services in the requested domain. TODO: authenticate this so only the server can
+	// request access to any namespace
+	if len(req.Domain) > 0 && req.Domain != namespace.DefaultNamespace {
+		srvs, err := r.Registry.ListServices(registry.ListDomain(req.Domain))
+		if err != nil && err != registry.ErrNotFound {
 			return errors.InternalServerError("go.micro.registry", err.Error())
 		}
 		services = append(services, srvs...)
