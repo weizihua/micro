@@ -364,12 +364,6 @@ func Commands(options ...micro.Option) []*cli.Command {
 				EnvVars: []string{"MICRO_API_ENABLE_CORS"},
 				Value:   true,
 			},
-			&cli.StringFlag{
-				Name:    "router_network",
-				Usage:   "Set the network the router will route to. Supported values include subdomain.",
-				EnvVars: []string{"MICRO_API_ROUTER_NETWORK"},
-				Value:   "micro",
-			},
 		},
 	}
 
