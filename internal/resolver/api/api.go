@@ -15,9 +15,11 @@ type Resolver struct {
 	Options resolver.Options
 }
 
-func (r *Resolver) Resolve(req *http.Request) (*resolver.Endpoint, error) {
-	var name, method string
+func (r *Resolver) Resolve(req *http.Request, opts ...resolver.ResolveOption) (*resolver.Endpoint, error) {
+	// parse the options
+	options := resolver.NewResolveOptions(opts...)
 
+	var name, method string
 	switch r.Options.Handler {
 	// internal handlers
 	case "meta", "api", "rpc", "micro":
@@ -30,7 +32,7 @@ func (r *Resolver) Resolve(req *http.Request) (*resolver.Endpoint, error) {
 	return &resolver.Endpoint{
 		Name:    r.Options.Namespace + "." + name,
 		Method:  method,
-		Network: "micro",
+		Network: options.Network,
 	}, nil
 }
 

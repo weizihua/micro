@@ -2,10 +2,12 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 
+	"github.com/micro/go-micro/v2/api/resolver"
 	res "github.com/micro/go-micro/v2/api/resolver"
 	"github.com/micro/go-micro/v2/router"
 	"github.com/micro/go-micro/v2/selector"
@@ -28,7 +30,10 @@ func (r *Resolver) String() string {
 
 // Resolve replaces the values of Host, Path, Scheme to calla backend service
 // It accounts for subdomains for service names based on namespace
-func (r *Resolver) Resolve(req *http.Request) (*res.Endpoint, error) {
+func (r *Resolver) Resolve(req *http.Request, opts ...res.ResolveOption) (*res.Endpoint, error) {
+	// parse the options
+	options := resolver.NewResolveOptions(opts...)
+
 	parts := strings.Split(req.URL.Path, "/")
 	if len(parts) < 2 {
 		return nil, errors.New("unknown service")
@@ -39,8 +44,13 @@ func (r *Resolver) Resolve(req *http.Request) (*res.Endpoint, error) {
 	}
 
 	// lookup the routes for the service
-	routes, err := r.Router.Lookup(router.QueryService(r.Namespace + "." + parts[1]))
+	query := []router.QueryOption{
+		router.QueryService(r.Namespace + "." + parts[1]),
+		router.QueryNetwork(options.Network),
+	}
+	routes, err := r.Router.Lookup(query...)
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 
@@ -52,9 +62,10 @@ func (r *Resolver) Resolve(req *http.Request) (*res.Endpoint, error) {
 
 	// we're done
 	return &res.Endpoint{
-		Name:   parts[1],
-		Method: req.Method,
-		Host:   route.Address,
-		Path:   "/" + strings.Join(parts[2:], "/"),
+		Name:    parts[1],
+		Method:  req.Method,
+		Host:    route.Address,
+		Path:    "/" + strings.Join(parts[2:], "/"),
+		Network: route.Network,
 	}, nil
 }

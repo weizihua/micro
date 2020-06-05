@@ -130,7 +130,7 @@ func (s *srv) proxy() *proxy {
 		// and the mux didn't match any routes.
 		endpoint, ok := (r.Context().Value(res.Endpoint{})).(*res.Endpoint)
 		if !ok {
-			r.URL.Path = "/not-found"
+			r.URL.Path = "/notfound"
 			return
 		}
 
@@ -205,7 +205,13 @@ func (s *srv) indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	services, err := s.registry.ListServices(registry.ListContext(r.Context()))
+	// if we're using the subdomain resolver, we want to use a custom network
+	network := "micro"
+	if res, ok := s.resolver.(*subdomain.Resolver); ok {
+		network = res.ResolveNetwork(r)
+	}
+
+	services, err := s.registry.ListServices(registry.ListDomain(network))
 	if err != nil {
 		log.Errorf("Error listing services: %v", err)
 	}
@@ -248,8 +254,14 @@ func (s *srv) registryHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	svc := vars["name"]
 
+	// if we're using the subdomain resolver, we want to use a custom network
+	network := "micro"
+	if res, ok := s.resolver.(*subdomain.Resolver); ok {
+		network = res.ResolveNetwork(r)
+	}
+
 	if len(svc) > 0 {
-		sv, err := s.registry.GetService(svc, registry.GetContext(r.Context()))
+		sv, err := s.registry.GetService(svc, registry.GetDomain(network))
 		if err != nil {
 			http.Error(w, "Error occurred:"+err.Error(), 500)
 			return
@@ -277,7 +289,7 @@ func (s *srv) registryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	services, err := s.registry.ListServices(registry.ListContext(r.Context()))
+	services, err := s.registry.ListServices(registry.ListDomain(network))
 	if err != nil {
 		log.Errorf("Error listing services: %v", err)
 	}
@@ -301,7 +313,13 @@ func (s *srv) registryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *srv) callHandler(w http.ResponseWriter, r *http.Request) {
-	services, err := s.registry.ListServices(registry.ListContext(r.Context()))
+	// if we're using the subdomain resolver, we want to use a custom network
+	network := "micro"
+	if res, ok := s.resolver.(*subdomain.Resolver); ok {
+		network = res.ResolveNetwork(r)
+	}
+
+	services, err := s.registry.ListServices(registry.ListDomain(network))
 	if err != nil {
 		log.Errorf("Error listing services: %v", err)
 	}
@@ -315,7 +333,7 @@ func (s *srv) callHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		// lookup the endpoints otherwise
-		s, err := s.registry.GetService(service.Name, registry.GetContext(r.Context()))
+		s, err := s.registry.GetService(service.Name, registry.GetDomain(network))
 		if err != nil {
 			continue
 		}
@@ -457,7 +475,7 @@ func Run(ctx *cli.Context, srvOpts ...micro.Option) {
 
 	// the web handler itself
 	s.HandleFunc("/favicon.ico", faviconHandler)
-	s.HandleFunc("/not-found", s.notFoundHandler)
+	s.HandleFunc("/notfound", s.notFoundHandler)
 	s.HandleFunc("/client", s.callHandler)
 	s.HandleFunc("/services", s.registryHandler)
 	s.HandleFunc("/service/{name}", s.registryHandler)
