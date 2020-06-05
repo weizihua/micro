@@ -42,7 +42,6 @@ import (
 	"github.com/micro/micro/v2/internal/stats"
 	"github.com/micro/micro/v2/plugin"
 	"github.com/serenize/snaker"
-	"golang.org/x/net/publicsuffix"
 )
 
 //Meta Fields of micro web
@@ -217,9 +216,6 @@ func (s *srv) indexHandler(w http.ResponseWriter, r *http.Request) {
 		Icon string // TODO: lookup icon
 	}
 
-	// if the resolver is subdomain, we will need the domain
-	domain, _ := publicsuffix.EffectiveTLDPlusOne(r.URL.Hostname())
-
 	var webServices []webService
 	for _, srv := range services {
 		// not a web app
@@ -229,17 +225,12 @@ func (s *srv) indexHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		name := comps[1]
 
-		link := fmt.Sprintf("/%v/", name)
-		if Resolver == "subdomain" && len(domain) > 0 {
-			link = fmt.Sprintf("https://%v.%v", name, domain)
-		}
-
 		// in the case of 3 letter things e.g m3o convert to M3O
 		if len(name) <= 3 && strings.ContainsAny(name, "012345789") {
 			name = strings.ToUpper(name)
 		}
 
-		webServices = append(webServices, webService{Name: name, Link: link})
+		webServices = append(webServices, webService{Name: name, Link: fmt.Sprintf("/%v/", name)})
 	}
 
 	sort.Slice(webServices, func(i, j int) bool { return webServices[i].Name < webServices[j].Name })
