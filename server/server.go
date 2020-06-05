@@ -19,14 +19,14 @@ var (
 	// list of services managed
 	services = []string{
 		// runtime services
-		"config",   // ????
 		"auth",     // :8010
-		"network",  // :8085
-		"runtime",  // :8088
 		"registry", // :8000
+		"router",   // :8084
+		"network",  // :8085
+		"config",   // ????
+		"runtime",  // :8088
 		"broker",   // :8001
 		"store",    // :8002
-		"router",   // :8084
 		"debug",    // :????
 		"proxy",    // :8081
 		"api",      // :8080
@@ -151,6 +151,7 @@ func Run(context *cli.Context) error {
 		switch service {
 		case "proxy", "web", "api":
 			envs = append(envs, "MICRO_AUTH=service")
+			envs = append(envs, "MICRO_REGISTRY=service")
 		}
 
 		// runtime based on environment we run the service in
