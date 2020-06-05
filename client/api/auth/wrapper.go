@@ -37,18 +37,17 @@ type authWrapper struct {
 func (a authWrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Determine the name of the service being requested
 	endpoint, err := a.resolver.Resolve(req)
-	if err == resolver.ErrInvalidPath || err == router.ErrRouteNotFound {
+	if err == nil {
+		// set the endpoint in the context so it can be used to resolve the request later
+		ctx := context.WithValue(req.Context(), resolver.Endpoint{}, endpoint)
+		*req = *req.Clone(ctx)
+	} else if err == resolver.ErrInvalidPath || err == router.ErrRouteNotFound {
 		// a file not served by the resolver has been requested (e.g. favicon.ico)
 		endpoint = &resolver.Endpoint{Path: req.URL.Path}
 	} else if err != nil {
 		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 		return
-	} else {
-		// set the endpoint in the context so it can be used to resolve
-		// the request later
-		ctx := context.WithValue(req.Context(), resolver.Endpoint{}, endpoint)
-		*req = *req.Clone(ctx)
 	}
 
 	// Determine the namespace and set it in the header
