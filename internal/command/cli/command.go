@@ -427,7 +427,7 @@ func NetworkNodes(c *cli.Context) ([]byte, error) {
 }
 
 func NetworkRoutes(c *cli.Context) ([]byte, error) {
-	cli := (*cmd.DefaultOptions().Client)
+	cli := inclient.New(c)
 
 	query := map[string]string{}
 
@@ -512,7 +512,7 @@ func NetworkRoutes(c *cli.Context) ([]byte, error) {
 }
 
 func NetworkServices(c *cli.Context) ([]byte, error) {
-	cli := (*cmd.DefaultOptions().Client)
+	cli := inclient.New(c)
 
 	var rsp map[string]interface{}
 
@@ -540,7 +540,7 @@ func NetworkServices(c *cli.Context) ([]byte, error) {
 }
 
 func NetworkDNSAdvertise(c *cli.Context) ([]byte, error) {
-	err := networkDNSHelper("Dns.Advertise", c.String("address"), c.String("domain"), c.String("token"))
+	err := networkDNSHelper(c, "Dns.Advertise", c.String("address"), c.String("domain"), c.String("token"))
 	if err != nil {
 		return []byte(``), err
 	}
@@ -548,7 +548,7 @@ func NetworkDNSAdvertise(c *cli.Context) ([]byte, error) {
 }
 
 func NetworkDNSRemove(c *cli.Context) ([]byte, error) {
-	err := networkDNSHelper("Dns.Remove", c.String("address"), c.String("domain"), c.String("token"))
+	err := networkDNSHelper(c, "Dns.Remove", c.String("address"), c.String("domain"), c.String("token"))
 	if err != nil {
 		return []byte(``), err
 	}
@@ -560,7 +560,7 @@ func NetworkDNSResolve(c *cli.Context) ([]byte, error) {
 	request["name"] = c.String("domain")
 	request["type"] = c.String("type")
 
-	cli := (*cmd.DefaultOptions().Client)
+	cli := inclient.New(c)
 	req := cli.NewRequest("go.micro.network.dns", "Dns.Resolve", request, client.WithContentType("application/json"))
 	var rsp map[string][]*dns.Record
 	err := cli.Call(
@@ -587,7 +587,7 @@ func NetworkDNSResolve(c *cli.Context) ([]byte, error) {
 	return []byte(strings.Join(resolved, "\n")), nil
 }
 
-func networkDNSHelper(action, address, domain, token string) error {
+func networkDNSHelper(ctx *cli.Context, action, address, domain, token string) error {
 	request := map[string]interface{}{
 		"records": []*dns.Record{},
 	}
@@ -612,7 +612,7 @@ func networkDNSHelper(action, address, domain, token string) error {
 		}
 	}
 
-	cli := (*cmd.DefaultOptions().Client)
+	cli := inclient.New(ctx)
 	req := cli.NewRequest("go.micro.network.dns", action, request, client.WithContentType("application/json"))
 	var rsp map[string]interface{}
 	err := cli.Call(
@@ -708,7 +708,7 @@ func CallService(c *cli.Context, args []string) ([]byte, error) {
 	}
 
 	ctx := callContext(c)
-	creq := (*cmd.DefaultOptions().Client).NewRequest(service, endpoint, request, client.WithContentType("application/json"))
+	creq := inclient.New(c).NewRequest(service, endpoint, request, client.WithContentType("application/json"))
 
 	var opts []client.CallOption
 
@@ -719,12 +719,12 @@ func CallService(c *cli.Context, args []string) ([]byte, error) {
 	var err error
 	if output := c.String("output"); output == "raw" {
 		rsp := cbytes.Frame{}
-		err = (*cmd.DefaultOptions().Client).Call(ctx, creq, &rsp, opts...)
+		err = inclient.New(c).Call(ctx, creq, &rsp, opts...)
 		// set the raw output
 		response = rsp.Data
 	} else {
 		var rsp json.RawMessage
-		err = (*cmd.DefaultOptions().Client).Call(ctx, creq, &rsp, opts...)
+		err = inclient.New(c).Call(ctx, creq, &rsp, opts...)
 		// set the response
 		if err == nil {
 			var out bytes.Buffer
@@ -748,12 +748,12 @@ func QueryHealth(c *cli.Context, args []string) ([]byte, error) {
 		return nil, errors.New("require service name")
 	}
 
-	req := (*cmd.DefaultOptions().Client).NewRequest(args[0], "Debug.Health", &proto.HealthRequest{})
+	req := inclient.New(c).NewRequest(args[0], "Debug.Health", &proto.HealthRequest{})
 
 	// if the address is specified then we just call it
 	if addr := c.String("address"); len(addr) > 0 {
 		rsp := &proto.HealthResponse{}
-		err := (*cmd.DefaultOptions().Client).Call(
+		err := inclient.New(c).Call(
 			context.Background(),
 			req,
 			rsp,
@@ -795,7 +795,7 @@ func QueryHealth(c *cli.Context, args []string) ([]byte, error) {
 			var err error
 
 			// call using client
-			err = (*cmd.DefaultOptions().Client).Call(
+			err = inclient.New(c).Call(
 				context.Background(),
 				req,
 				rsp,
@@ -831,7 +831,7 @@ func QueryStats(c *cli.Context, args []string) ([]byte, error) {
 		return nil, errors.New("Service not found")
 	}
 
-	req := (*cmd.DefaultOptions().Client).NewRequest(service[0].Name, "Debug.Stats", &proto.StatsRequest{})
+	req := inclient.New(c).NewRequest(service[0].Name, "Debug.Stats", &proto.StatsRequest{})
 
 	var output []string
 
@@ -851,7 +851,7 @@ func QueryStats(c *cli.Context, args []string) ([]byte, error) {
 			var err error
 
 			// call using client
-			err = (*cmd.DefaultOptions().Client).Call(
+			err = inclient.New(c).Call(
 				context.Background(),
 				req,
 				rsp,

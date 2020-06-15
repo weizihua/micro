@@ -2,7 +2,6 @@ package web
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -50,7 +49,6 @@ func (r *Resolver) Resolve(req *http.Request, opts ...res.ResolveOption) (*res.E
 	}
 	routes, err := r.Router.Lookup(query...)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 

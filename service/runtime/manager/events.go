@@ -59,7 +59,7 @@ func (m *manager) watchEvents() {
 		// get the keys of the events
 		events, err := m.options.Store.Read(eventPrefix, store.ReadPrefix())
 		if err != nil {
-			logger.Warn("Error listing events: %v", err)
+			logger.Warnf("Error listing events: %v", err)
 			continue
 		}
 
