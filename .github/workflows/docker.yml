@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - crufter
     tags:
       - v2.*
       - v3.*
